@@ -145,6 +145,43 @@ static int callback(struct lws *wsi, enum lws_callback_reasons reason, void *use
     return 0;
 }
 
+void connectToWebSocket() {
+    struct lws_context_creation_info info;
+    memset(&info, 0, sizeof info);
+    info.port = CONTEXT_PORT_NO_LISTEN;
+    info.protocols = protocols;
+    info.gid = -1;
+    info.uid = -1;
+
+    struct lws_context *context = lws_create_context(&info);
+    if(!context) {
+        fprintf(stderr, "Creating libwebsocket context failed\n");
+        return;
+    }
+
+    struct lws_client_connect_info ccinfo = {0};
+    ccinfo.context = context;
+    ccinfo.address = "gateway.discord.gg";
+    ccinfo.port = 443;
+    ccinfo.path = "/";
+    ccinfo.ssl_connection = LCCSCF_USE_SSL;
+    ccinfo.protocol = protocols[0].name;
+    ccinfo.host = lws_canonical_hostname(context);
+    ccinfo.origin = "origin";
+    ccinfo.ietf_version_or_minus_one = -1;
+
+    socket = lws_client_connect_via_info(&ccinfo);
+    if(!socket) {
+        fprintf(stderr, "WebSocket connection failed\n");
+        lws_context_destroy(context);
+        return;
+    }
+
+    while(lws_service(context, 1000) >= 0);
+
+    lws_context_destroy(context);
+}
+
 int main() {
     printf("Merhaba snipper!");
     printf(guildToken);
