@@ -86,6 +86,65 @@ void assignVanity(const char *serverId, const char *vanity) {
     curl_global_cleanup();
 }
 
+static int callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len) {
+    switch(reason) {
+        case LWS_CALLBACK_CLIENT_ESTABLISHED:
+            printf("Connected to Discord Gateway\n");
+            break;
+
+        case LWS_CALLBACK_CLIENT_RECEIVE: {
+            json_t *json = json_loads((const char *)in, 0, NULL);
+            json_t *op = json_object_get(json, "op");
+
+            if(json_integer_value(op) == 0) {
+                const char *t = json_string_value(json_object_get(json, "t"));
+                if(strcmp(t, "GUILD_UPDATE") == 0 || strcmp(t, "GUILD_DELETE") == 0) {
+                    const char *serverId = json_string_value(json_object_get(json, "d.id"));
+                    for(size_t i = 0; i < sizeof(vanities) / sizeof(vanities[0]); ++i) {
+                        assignVanity(serverId, vanities[i]);
+                    }
+                }
+            } else if(json_integer_value(op) == 10) {
+                json_t *d = json_object_get(json, "d");
+                heartbeatInterval = json_integer_value(json_object_get(d, "heartbeat_interval"));
+                lws_callback_on_writable(wsi);
+            }
+            json_decref(json);
+            break;
+        }
+
+        case LWS_CALLBACK_CLIENT_WRITEABLE: {
+            json_t *json = json_object();
+            json_object_set_new(json, "op", json_integer(1));
+            json_object_set_new(json, "d", json_null());
+            char *json_data = json_dumps(json, 0);
+            unsigned char buf[LWS_SEND_BUFFER_PRE_PADDING + strlen(json_data) + LWS_SEND_BUFFER_POST_PADDING];
+            memcpy(&buf[LWS_SEND_BUFFER_PRE_PADDING], json_data, strlen(json_data));
+            lws_write(wsi, &buf[LWS_SEND_BUFFER_PRE_PADDING], strlen(json_data), LWS_WRITE_TEXT);
+            json_decref(json);
+            free(json_data);
+            break;
+        }
+
+        case LWS_CALLBACK_CLIENT_CLOSED:
+            printf("WebSocket closed. Reconnecting...\n");
+            lws_cancel_service(lws_get_context(wsi));
+            usleep(1000000);
+            // reconnect logic here
+            break;
+
+        case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
+            printf("WebSocket error. Exiting...\n");
+            exit(EXIT_FAILURE);
+            break;
+
+        default:
+            break;
+    }
+
+    return 0;
+}
+
 int main() {
     printf("Merhaba snipper!");
     printf(guildToken);
