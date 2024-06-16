@@ -182,6 +182,16 @@ void connectToWebSocket() {
     lws_context_destroy(context);
 }
 
+static const struct lws_protocols protocols[] = {
+    {
+        "protocol",
+        callback,
+        0,
+        65536,
+    },
+    { NULL, NULL, 0, 0 } /* terminator */
+};
+
 int main() {
     printf("Merhaba snipper!");
     printf(guildToken);
